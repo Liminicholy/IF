@@ -102,7 +102,7 @@ class InstFifo extends Module {
     io.master_is_in_delayslot_o := false.B
   }
 
-  // Delay slot read signal写入逻辑
+  // Delay slot read signal延迟槽暂停
   when(io.rst) {
     delayslot_stall := false.B
   }.elsewhen(io.fifo_rst && io.delay_sel_rst && !io.flush_delay_slot && io.i_stall && 
@@ -114,7 +114,7 @@ class InstFifo extends Module {
     delayslot_stall := delayslot_stall
   }
 
-  // Next instruction is in the delay slot that needs to be executed
+  // Next instruction is in the delay slot that needs to be executed延迟槽指令行
   when(io.rst) {
     delayslot_enable := false.B
     delayslot_line := 0.U.asTypeOf(new FifoEntry)
