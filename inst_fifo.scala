@@ -91,9 +91,9 @@ class InstFifo extends Module {
   io.empty := data_count === 0.U               // 0000
   io.almost_empty := data_count === 1.U        // 0001
 
-  // Delay slot judgment延迟槽处理
+  // Delay slot judgment延迟槽判断逻辑
   when(io.rst || io.flush_delay_slot) {
-    io.master_is_in_delayslot_o := false.B                   //当前在
+    io.master_is_in_delayslot_o := false.B                   
   }.elsewhen(!io.read_en1) {
     io.master_is_in_delayslot_o := io.master_is_in_delayslot_o  
   }.elsewhen(io.master_is_branch && !io.read_en2) {
