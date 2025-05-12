@@ -11,18 +11,18 @@ class FifoEntry extends Bundle {
 class InstFifoIO extends Bundle {
   val clk = Input(Clock())
   val rst = Input(Bool())
-  val fifo_rst = Input(Bool())                 // fifo read/write pointer reset
+  val fifo_rst = Input(Bool())                 // fifo读写指针复位（重置指针）
   val flush_delay_slot = Input(Bool())
   val delay_sel_rst = Input(Bool())
-  val D_delay_rst = Input(Bool())              // next master instruction is delay slot, needs to be stored
-  val E_delay_rst = Input(Bool())              // next master instruction is delay slot, needs to be stored
+  val D_delay_rst = Input(Bool())              // 标记下一条指令是否为延迟槽指令（需存储）
+  val E_delay_rst = Input(Bool())              // 
   val D_ena = Input(Bool())
-  val i_stall = Input(Bool())
-  val master_is_branch = Input(Bool())         // delay slot judgment
-  val master_is_in_delayslot_o = Output(Bool()) // delay slot judgment result
+  val i_stall = Input(Bool())                  //流水线停滞信号
+  val master_is_branch = Input(Bool())         // 主指令是否为分支指令（触发延迟槽）
+  val master_is_in_delayslot_o = Output(Bool()) // 输出当前主指令是否在延迟槽中
 
-  val read_en1 = Input(Bool())    // whether master is issued
-  val read_en2 = Input(Bool())    // whether slave is issued                   
+  val read_en1 = Input(Bool())    
+  val read_en2 = Input(Bool())    //读取使能                   
   val read_tlb_refill1 = Output(Bool())
   val read_tlb_refill2 = Output(Bool())
   val read_tlb_invalid1 = Output(Bool())
@@ -32,34 +32,34 @@ class InstFifoIO extends Bundle {
   val read_address1 = Output(UInt(32.W)) // instruction address (PC)
   val read_address2 = Output(UInt(32.W)) 
 
-  val write_en1 = Input(Bool()) // data read back ==> inst_ok & inst_ok_1
-  val write_en2 = Input(Bool()) // data read back ==> inst_ok & inst_ok_2
+  val write_en1 = Input(Bool()) 
+  val write_en2 = Input(Bool())         // 写入使能
   val write_tlb_refill1 = Input(Bool())
-  val write_tlb_refill2 = Input(Bool())
+  val write_tlb_refill2 = Input(Bool())  //tlb重填异常
   val write_tlb_invalid1 = Input(Bool())
-  val write_tlb_invalid2 = Input(Bool())
-  val write_address1 = Input(UInt(32.W)) // PC
-  val write_address2 = Input(UInt(32.W))  
-  val write_data1 = Input(UInt(32.W)) // instruction write
-  val write_data2 = Input(UInt(32.W)) 
+  val write_tlb_invalid2 = Input(Bool()) //tlb无效异常
+  val write_address1 = Input(UInt(32.W)) 
+  val write_address2 = Input(UInt(32.W))  //指令地址（PC值）
+  val write_data1 = Input(UInt(32.W))
+  val write_data2 = Input(UInt(32.W))    //指令内容（32位） 
   
-  val empty = Output(Bool()) 
-  val almost_empty = Output(Bool())  
-  val full = Output(Bool())
+  val empty = Output(Bool())         //fifo为空
+  val almost_empty = Output(Bool())  //fifo只剩一条指令
+  val full = Output(Bool())          //fifo满（无法写入新指令）
 }
 
 class InstFifo extends Module {
   val io = IO(new InstFifoIO)
 
   // fifo structure
-  val lines = Reg(Vec(16, new FifoEntry))
+  val lines = Reg(Vec(16, new FifoEntry)) //16个深度的fifo，每个条目存储data addr tlb异常
   val read_line1 = Wire(new FifoEntry)
   val read_line2 = Wire(new FifoEntry)
   val write_line1 = Wire(new FifoEntry)
   val write_line2 = Wire(new FifoEntry)
-  val delayslot_line = Reg(new FifoEntry)
-  val delayslot_stall = RegInit(false.B) // still reading related data
-  val delayslot_enable = RegInit(false.B) // needs to read delay slot data
+  val delayslot_line = Reg(new FifoEntry) //临时保存延迟槽指令
+  val delayslot_stall = RegInit(false.B) // 延迟槽数据未就绪时阻塞
+  val delayslot_enable = RegInit(false.B) // 当前需要读取延迟槽指令
 
   // fifo control
   val write_pointer = RegInit(0.U(4.W))
@@ -87,22 +87,22 @@ class InstFifo extends Module {
   io.read_data2 := read_line2.data
 
   // fifo status
-  io.full := data_count(3, 1).andR() || (write_pointer + 1.U === read_pointer) // 1110 (can't hold two more instructions)
-  io.empty := data_count === 0.U // 0000
-  io.almost_empty := data_count === 1.U // 0001
+  io.full := data_count(3, 1).andR() || (write_pointer + 1.U === read_pointer) // 1110 data_count>=14,剩余空间不足2条指令，或指针即将重叠
+  io.empty := data_count === 0.U               // 0000
+  io.almost_empty := data_count === 1.U        // 0001
 
-  // Delay slot judgment
+  // Delay slot judgment延迟槽处理
   when(io.rst || io.flush_delay_slot) {
-    io.master_is_in_delayslot_o := false.B
+    io.master_is_in_delayslot_o := false.B                   //当前在
   }.elsewhen(!io.read_en1) {
-    io.master_is_in_delayslot_o := io.master_is_in_delayslot_o
+    io.master_is_in_delayslot_o := io.master_is_in_delayslot_o  
   }.elsewhen(io.master_is_branch && !io.read_en2) {
-    io.master_is_in_delayslot_o := true.B
+    io.master_is_in_delayslot_o := true.B                    //master is branch && slave未发射，下一条master是延迟槽指令
   }.otherwise {
     io.master_is_in_delayslot_o := false.B
   }
 
-  // Delay slot read signal
+  // Delay slot read signal写入逻辑
   when(io.rst) {
     delayslot_stall := false.B
   }.elsewhen(io.fifo_rst && io.delay_sel_rst && !io.flush_delay_slot && io.i_stall && 
