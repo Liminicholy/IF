@@ -104,29 +104,29 @@
 
 ### Pc_reg 模块
 1. **分支预测与修正**  
-   - D_bj 来自BTB预测，E_bj 来自执行单元实际结果，后者优先级更高
-   - 预测错误时通过 M_flush_all 冲刷流水线，并更新PC至正确地址
+   `D_bj` 来自BTB预测，`E_bj` 来自执行单元实际结果，后者优先级更高
+   预测错误时通过 `M_flush_all` 冲刷流水线，并更新PC至正确地址
 
 2. **取指流控**  
-   - D_fifo_full 为高时，PC冻结以避免FIFO溢出
-   - 双指令取指成功时PC+8，单指令成功时PC+4
+   `D_fifo_full` 为高时，PC冻结以避免FIFO溢出
+   双指令取指成功时`PC+8`，单指令成功时`PC+4`
 
 3. **输出特性**  
-   - pc_curr 为当前周期PC值（寄存器输出）
-   - pc_next 为预计算的下一周期值（组合逻辑）
+   `pc_curr` 为当前周期PC值（寄存器输出）
+   `pc_next` 为预计算的下一周期值（组合逻辑）
 
 4. **复位地址**  
-   固定为 0xbfc00000（典型MIPS架构启动地址），不可配置
+   固定为 `0xbfc00000`（典型MIPS架构启动地址），不可配置
 
 ## 端口优先级与更新逻辑
 PC更新按以下优先级顺序（从高到低）：
-1. 复位 (rst) → 0xbfc00000
-2. 异常 (M_except) → M_except_addr
-3. 流水线冲刷 (M_flush_all) → M_flush_all_addr
-4. 执行阶段分支 (E_bj) → E_bj_target（修正预测错误）
-5. 译码阶段预测 (D_bj) → D_bj_target
-6. FIFO反压 (D_fifo_full) → 保持当前PC
+1. 复位 (`rst`) → `0xbfc00000`
+2. 异常 (`M_except`) → `M_except_addr`
+3. 流水线冲刷 (`M_flush_all`) → `M_flush_all_addr`
+4. 执行阶段分支 (`E_bj`) → `E_bj_target`（修正预测错误）
+5. 译码阶段预测 (`D_bj`) → `D_bj_target`
+6. FIFO反压 (`D_fifo_full`) → 保持当前PC
 7. 正常取指：
-   - 双指令成功 (F_inst_data_ok1 && F_inst_data_ok2) → pc_curr + 8
-   - 单指令成功 (F_inst_data_ok1) → pc_curr + 4
+   - 双指令成功 (`F_inst_data_ok1 && F_inst_data_ok2`) → `pc_curr + 8`
+   - 单指令成功 (`F_inst_data_ok1`) → `pc_curr + 4`
    - 默认 → 保持当前PC
