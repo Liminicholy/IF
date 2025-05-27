@@ -60,11 +60,11 @@ class InstFifo extends Module {
     count := count + 1.U
   } //主指令写入？
   
-  when(!io.almost_full) {  
+  when(!io.almost_full && !io.full) {  
     lines(write_ptr +% 1.U).addr := io.write_address2  // 循环寻址
     lines(write_ptr +% 1.U).data := io.write_data2
     count := count + 1.U
-  } //从指令取指
+  } 
 
   // 写指针更新（同步）//清空是rst信号 异步
   when(io.fifo_rst) {
@@ -79,10 +79,30 @@ class InstFifo extends Module {
   
   // 读取逻辑（同步）
   // 组合逻辑输出（无时钟延迟）
-  io.read_data1    := Mux(!io.empty, lines(read_ptr).data, 0.U)              //lines(read_ptr).data
-  io.read_data2    := Mux(!io.almost_empty, lines(read_ptr +% 1.U).data, 0.U)  //是否almost_empty状态
-  io.read_address1 := Mux(!io.empty, lines(read_ptr).addr, 0.U)                //lines(read_ptr).addr
-  io.read_address2 := Mux(!io.almost_empty, lines(read_ptr +% 1.U).addr, 0.U)
+  //io.read_data1    := Mux(!io.empty, lines(read_ptr).data, 0.U)              //lines(read_ptr).data
+  //io.read_data2    := Mux(!io.almost_empty, lines(read_ptr +% 1.U).data, 0.U)  //是否almost_empty状态
+  //io.read_address1 := Mux(!io.empty, lines(read_ptr).addr, 0.U)                //lines(read_ptr).addr
+  //io.read_address2 := Mux(!io.almost_empty, lines(read_ptr +% 1.U).addr, 0.U)
+  when (!io.empty) {
+    io.read_data1    := lines(read_ptr).data
+    io.read_address1 := lines(read_ptr).addr
+    count := count - 1.U
+  }.otherwise {
+    io.read_data1    := 0.U
+    io.read_address1 := 0.U
+    count := count
+  }
+
+  when (!io.almost_empty && !io.empty) {
+    io.read_data2    := lines(read_ptr +% 1.U).data
+    io.read_address2 := lines(read_ptr +% 1.U).addr
+    count := count - 1.U
+  }.otherwise {
+    io.read_data2    := 0.U
+    io.read_address2 := 0.U
+    count := count
+  }
+ 
 
   // 读指针更新（i_stall控制）,读使能 id提供一个 决定是否push（即从指令被退回作为下一周期的主指令）
   when(io.fifo_rst) {
@@ -99,19 +119,8 @@ class InstFifo extends Module {
   read_ptr := read_ptr    //显式保持 stall
 }
   
-  // 计数器（同步）
-  when(io.fifo_rst) {
-    count := 0.U
-  }.otherwise {
-    val inc = Mux(io.write_en1 && io.write_en2, 2.U, 
-               Mux(io.write_en1 || io.write_en2, 1.U, 0.U))
-    val dec = Mux(!io.i_stall && io.read_en1 && io.read_en2 && count > 1.U, 2.U,
-               Mux(!io.i_stall && io.read_en1 && count > 0.U, 1.U, 0.U))) //stall信号有效，冻结计数器减量，保持fifo状态不变
-    count := count + inc - dec
-  }  //读完写完的信号如何判断 （从指针的移动判断已读已写的line
-  
   // 状态信号
-  io.full         := (count === 15.U) || (count === 14.U && io.write_en1 && io.write_en2)
+  io.full         := (count === 15.U) // 无写使能|| (count === 14.U && io.write_en1 && io.write_en2)
   io.almost_full  := (count === 14.U)
   io.empty        := (count === 0.U)
   io.almost_empty := (count === 1.U)
