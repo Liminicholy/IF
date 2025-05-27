@@ -52,6 +52,12 @@ class InstFifo extends Module {
   withReset(reset) {
     val lines = Reg(Vec(16, new FifoEntry)) // 存储条目
   } 
+
+ // 状态信号（组合逻辑）
+  io.full         := (count === 15.U) // 无写使能|| (count === 14.U && io.write_en1 && io.write_en2)
+  io.almost_full  := (count >= 14.U)
+  io.empty        := (count === 0.U)
+  io.almost_empty := (count <= 1.U)
   
   // 写入逻辑（同步）//写入和写指针是不受stall影响的 只和pc相关
   when(!io.full) {  
@@ -118,12 +124,6 @@ class InstFifo extends Module {
 }.otherwise {
   read_ptr := read_ptr    //显式保持 stall
 }
-  
-  // 状态信号
-  io.full         := (count === 15.U) // 无写使能|| (count === 14.U && io.write_en1 && io.write_en2)
-  io.almost_full  := (count === 14.U)
-  io.empty        := (count === 0.U)
-  io.almost_empty := (count === 1.U)
   
   // 移除的性能计数器
   // val master_cnt = RegInit(0.U(64.W)) 
