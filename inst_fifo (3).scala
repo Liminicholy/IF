@@ -60,72 +60,43 @@ class InstFifo extends Module {
   io.almost_empty := (count <= 1.U)
   
   // 写入逻辑（同步）//写入和写指针是不受stall影响的 只和pc相关
-  when(!io.full) {  
-    lines(write_ptr).addr := io.write_address1
-    lines(write_ptr).data := io.write_data1
-    count := count + 1.U
-  } //主指令写入？
-  
-  when(!io.almost_full && !io.full) {  
-    lines(write_ptr +% 1.U).addr := io.write_address2  // 循环寻址
-    lines(write_ptr +% 1.U).data := io.write_data2
-    count := count + 1.U
-  } 
-
-  // 写指针更新（同步）//清空是rst信号 异步
-  when(io.fifo_rst) {
-    write_ptr := 0.U
-  }.elsewhen(!io.almost_full) {
-    write_ptr := write_ptr +% 2.U
-  }.elsewhen(!io.full) {
-    write_ptr := write_ptr +% 1.U
-  }.elsewhen{
+when(!io.full && !io.almost_full){
+  lines(write_ptr) := Cat(io.write_address1, io.write_data1).asTypeOf(new FifoEntry)
+  lines(write_ptr +% 1.U) := Cat(io.write_address2, io.write_data2).asTypeOf(new FifoEntry)
+  write_ptr := write_ptr +% 2.U
+  count := count +% 2.U
+}.elsewhen(!io.full && io.almost_full){
+  lines(write_ptr) := Cat(io.write_address1, io.write_data1).asTypeOf(new FifoEntry)
+  write_ptr := write_ptr +% 1.U
+  count := count +% 1.U
+}.elsewhen{
     write_ptr := write_ptr
+    count := count
   }//满了 写指针停止
   
   // 读取逻辑（同步）
   // 组合逻辑输出（无时钟延迟）
-  //io.read_data1    := Mux(!io.empty, lines(read_ptr).data, 0.U)              //lines(read_ptr).data
-  //io.read_data2    := Mux(!io.almost_empty, lines(read_ptr +% 1.U).data, 0.U)  //是否almost_empty状态
-  //io.read_address1 := Mux(!io.empty, lines(read_ptr).addr, 0.U)                //lines(read_ptr).addr
-  //io.read_address2 := Mux(!io.almost_empty, lines(read_ptr +% 1.U).addr, 0.U)
-  when (!io.empty) {
-    io.read_data1    := lines(read_ptr).data
-    io.read_address1 := lines(read_ptr).addr
-    count := count - 1.U
-  }.otherwise {
-    io.read_data1    := 0.U
-    io.read_address1 := 0.U
-    count := count
-  }
-
-  when (!io.almost_empty && !io.empty) {
-    io.read_data2    := lines(read_ptr +% 1.U).data
-    io.read_address2 := lines(read_ptr +% 1.U).addr
-    count := count - 1.U
-  }.otherwise {
-    io.read_data2    := 0.U
-    io.read_address2 := 0.U
-    count := count
-  }
+  io.read_data1    := Mux(!io.empty, lines(read_ptr).data, 0.U)              //lines(read_ptr).data
+  io.read_data2    := Mux(!io.almost_empty, lines(read_ptr +% 1.U).data, 0.U)  //是否almost_empty状态
+  io.read_address1 := Mux(!io.empty, lines(read_ptr).addr, 0.U)                //lines(read_ptr).addr
+  io.read_address2 := Mux(!io.almost_empty, lines(read_ptr +% 1.U).addr, 0.U)
  
 
   // 读指针更新（i_stall控制）,读使能 id提供一个 决定是否push（即从指令被退回作为下一周期的主指令）
-  when(io.fifo_rst) {
-    read_ptr := 0.U
-  }.elsewhen(!io.i_stall) {  // i_stall为高时冻结读指针
-    when(!io.read_push && !io.almost_empty) {
+  when(!io.i_stall) {  // i_stall为高时冻结读指针
+    when(!io.read_push && !io.empty && !io.almost_empty) {
       read_ptr := read_ptr +% 2.U
-    }.elsewhen((io.read_push && !io.empty) || io.almost_empty) {
+      count := count - 2.U
+    }.elsewhen(!io.empty && (io.almost_empty || io.read_push)) {
       read_ptr := read_ptr +% 1.U
+      count := count - 1.U
     }.otherwise {
     read_ptr := read_ptr  // 显式保持 empty
+    count := count
   }
 }.otherwise {
   read_ptr := read_ptr    //显式保持 stall
+  count := count
 }
   
-  // 移除的性能计数器
-  // val master_cnt = RegInit(0.U(64.W)) 
-  // val slave_cnt  = RegInit(0.U(64.W))  
 }
