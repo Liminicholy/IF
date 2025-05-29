@@ -31,7 +31,7 @@ class InstFifoIO extends Bundle {
   val write_data2   = Input(UInt(32.W))
   //指令 对应数据
   
-  // 状态信号 //内部传
+  // 状态信号
   val empty         = Output(Bool())
   val almost_empty  = Output(Bool())
   val full          = Output(Bool())
@@ -46,10 +46,6 @@ class InstFifo extends Module {
     val write_ptr = RegInit(0.U(4.W))  //写指针
     val read_ptr  = RegInit(0.U(4.W))  //读指针
     val count    = RegInit(0.U(4.W))  //数据计数器
-  }
-  
-  // 同步复位
-  withReset(reset) {
     val lines = Reg(Vec(16, new FifoEntry)) // 存储条目
   } 
 
@@ -60,12 +56,12 @@ class InstFifo extends Module {
   io.almost_empty := (count <= 1.U)
   
   // 写入逻辑（同步）//写入和写指针是不受stall影响的 只和pc相关
-when(!io.full && !io.almost_full){
+when(!io.full && !io.almost_full){ //双写入
   lines(write_ptr) := Cat(io.write_address1, io.write_data1).asTypeOf(new FifoEntry)
   lines(write_ptr +% 1.U) := Cat(io.write_address2, io.write_data2).asTypeOf(new FifoEntry)
   write_ptr := write_ptr +% 2.U
   count := count +% 2.U
-}.elsewhen(!io.full && io.almost_full){
+}.elsewhen(!io.full && io.almost_full){ //单写入
   lines(write_ptr) := Cat(io.write_address1, io.write_data1).asTypeOf(new FifoEntry)
   write_ptr := write_ptr +% 1.U
   count := count +% 1.U
