@@ -85,8 +85,8 @@ class PCReg extends Module {
 
   // 计算下一个PC值的组合逻辑
   io.pc_next := Mux(reset, "hbfc00000".U,
-               Mux(io.E_bj && !io.E_bj_correct, io.E_bj_target,
-               Mux(io.D_bj && !predicted_branch, io.D_bj_target,
+               Mux(io.E_bj && !io.E_bj_correct, io.E_bj_target,  //EX阶段确定需要跳转，预测错误 执行阶段计算出的正确目标地址
+               Mux(io.D_bj && !predicted_branch, io.D_bj_target,  //ID阶段检测到分支指令，当前没有未完成的分支预测 预测的目标地址
                Mux(io.F_fifo_full, pc_reg,
                Mux(!predicted_branch, 
                  Mux(!io.F_fifo_almost_full && !io.F_fifo_full, pc_reg + 8.U,
